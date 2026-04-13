@@ -1,0 +1,24 @@
+version: 2
+
+# Elementary Data Observability Configuration
+# -------------------------------------------
+# This configuration enables automated data quality monitoring
+# using the Elementary package.
+# Note: Model-level elementary configs are defined in _core__models.yml
+
+exposures:
+  - name: elementary_alerts
+    type: dashboard
+    maturity: high
+    owner:
+      name: Data Team
+      email: data-team@example.com
+    description: |
+      Elementary data observability dashboard.
+      Monitors data quality, freshness, and volume anomalies.
+    depends_on:
+      - ref('fct_prix_carburants')
+      - ref('dim_stations')
+      - ref('dim_carburants')
+      - ref('dim_regions')
+      - ref('dim_date')

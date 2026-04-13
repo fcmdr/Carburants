@@ -1,0 +1,47 @@
+[sqlfluff]
+dialect = snowflake
+templater = dbt
+exclude_rules = LT05, ST06, AM04
+max_line_length = 120
+large_file_skip_byte_limit = 40000
+
+[sqlfluff:indentation]
+indent_unit = space
+tab_space_size = 4
+indented_joins = false
+indented_using_on = true
+template_blocks_indent = true
+
+[sqlfluff:layout:type:comma]
+spacing_before = touch
+line_position = trailing
+
+[sqlfluff:rules:capitalisation.keywords]
+capitalisation_policy = lower
+
+[sqlfluff:rules:capitalisation.identifiers]
+capitalisation_policy = lower
+
+[sqlfluff:rules:capitalisation.functions]
+capitalisation_policy = lower
+
+[sqlfluff:rules:capitalisation.literals]
+capitalisation_policy = lower
+
+[sqlfluff:rules:aliasing.table]
+aliasing = explicit
+
+[sqlfluff:rules:aliasing.column]
+aliasing = explicit
+
+[sqlfluff:rules:aliasing.expression]
+allow_scalar = false
+
+[sqlfluff:rules:ambiguous.column_references]
+group_by_and_order_by_style = implicit
+
+[sqlfluff:templater:dbt]
+project_dir = .
+profiles_dir = .
+profile = carburants
+target = dev

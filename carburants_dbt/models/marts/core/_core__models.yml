@@ -1,0 +1,188 @@
+version: 2
+
+models:
+  - name: dim_stations
+    description: |
+      Dimension table for fuel stations with all attributes including
+      location, services, opening hours, and current state.
+    config:
+      elementary:
+        # Detect sudden changes in station count
+        - name: volume_anomalies
+          timestamp_column: loaded_at
+          time_bucket:
+            period: day
+            count: 1
+          sensitivity: 2
+    columns:
+      - name: station_key
+        description: "Surrogate key for the station dimension"
+        tests:
+          - unique
+          - not_null
+      - name: station_id
+        description: "Natural key (PDV ID from source)"
+        tests:
+          - unique
+          - not_null
+      - name: latitude
+        description: "Station latitude (WGS84)"
+      - name: longitude
+        description: "Station longitude (WGS84)"
+      - name: region
+        description: "French administrative region"
+        tests:
+          - not_null
+      - name: type_station
+        description: "Station type (Route, Autoroute, Inconnu)"
+      - name: data_quality_score
+        description: "Data completeness score (0-100)"
+
+  - name: dim_carburants
+    description: |
+      Dimension table for fuel types with attributes like category,
+      bio content, and description.
+    columns:
+      - name: carburant_key
+        description: "Surrogate key for the fuel type dimension"
+        tests:
+          - unique
+          - not_null
+      - name: carburant_id
+        description: "Natural key (fuel type code)"
+        tests:
+          - unique
+          - not_null
+      - name: carburant_nom
+        description: "Short fuel name (GAZOLE, SP95, etc.)"
+        tests:
+          - not_null
+      - name: categorie
+        description: "Fuel category (Essence, Diesel, Biocarburant, GPL)"
+
+  - name: dim_regions
+    description: |
+      Dimension table for French administrative regions with
+      department counts and station statistics.
+    columns:
+      - name: region_key
+        description: "Surrogate key for the region dimension"
+        tests:
+          - unique
+          - not_null
+      - name: region_code
+        description: "Region abbreviation code"
+        tests:
+          - unique
+          - not_null
+      - name: region_nom
+        description: "Full region name"
+        tests:
+          - unique
+          - not_null
+      - name: chef_lieu
+        description: "Regional capital city"
+      - name: nb_departements
+        description: "Number of departments in the region"
+      - name: nb_stations
+        description: "Number of fuel stations in the region"
+
+  - name: dim_date
+    description: |
+      Date dimension table with French calendar attributes,
+      holidays, and period groupings.
+    columns:
+      - name: date_key
+        description: "Surrogate key for the date dimension"
+        tests:
+          - unique
+          - not_null
+      - name: date_day
+        description: "Calendar date"
+        tests:
+          - unique
+          - not_null
+      - name: annee
+        description: "Year number"
+      - name: mois
+        description: "Month number (1-12)"
+      - name: mois_nom_fr
+        description: "Month name in French"
+      - name: jour_nom_fr
+        description: "Day name in French"
+      - name: is_weekend
+        description: "True if Saturday or Sunday"
+      - name: is_jour_ferie
+        description: "True if French public holiday"
+
+  - name: fct_prix_carburants
+    description: |
+      Fact table containing daily fuel prices per station and fuel type.
+      Includes price variations, rankings, and trend indicators.
+    config:
+      elementary:
+        # Volume anomaly detection
+        - name: volume_anomalies
+          timestamp_column: date_prix
+          time_bucket:
+            period: day
+            count: 1
+          sensitivity: 3
+        # Freshness monitoring
+        - name: freshness_anomalies
+          timestamp_column: derniere_maj
+          time_bucket:
+            period: hour
+            count: 6
+    columns:
+      - name: prix_key
+        description: "Surrogate key for the fact table"
+        tests:
+          - unique
+          - not_null
+      - name: station_key
+        description: "Foreign key to dim_stations"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_stations')
+              field: station_key
+      - name: carburant_key
+        description: "Foreign key to dim_carburants"
+        tests:
+          - relationships:
+              to: ref('dim_carburants')
+              field: carburant_key
+              config:
+                severity: warn
+      - name: date_key
+        description: "Foreign key to dim_date"
+        tests:
+          - relationships:
+              to: ref('dim_date')
+              field: date_key
+              config:
+                severity: warn
+      - name: prix_euros
+        description: "Fuel price in euros per liter"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0.5
+              max_value: 5.0
+              config:
+                severity: warn
+      - name: rang_national
+        description: "National price ranking (1 = cheapest)"
+      - name: rang_region
+        description: "Regional price ranking (1 = cheapest)"
+      - name: categorie_prix
+        description: "Price category based on national percentile"
+        tests:
+          - accepted_values:
+              values: ['Très bon marché', 'Bon marché', 'Prix moyen', 'Cher', 'Très cher']
+      - name: tendance_prix
+        description: "Weekly price trend indicator"
+        tests:
+          - accepted_values:
+              values: ['Forte hausse', 'Hausse', 'Stable', 'Baisse', 'Forte baisse']

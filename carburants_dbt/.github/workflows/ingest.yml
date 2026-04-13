@@ -1,0 +1,171 @@
+name: Data Ingestion
+
+on:
+  schedule:
+    # Run every 6 hours
+    - cron: '0 */6 * * *'
+
+  workflow_dispatch:
+    inputs:
+      run_dbt:
+        description: 'Run dbt build after ingestion'
+        required: false
+        default: 'true'
+        type: boolean
+
+env:
+  SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+  SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+  SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+  SNOWFLAKE_DATABASE: CARBURANTS_PROD
+  SNOWFLAKE_SCHEMA: RAW
+  SNOWFLAKE_WAREHOUSE: COMPUTE_WH
+  SNOWFLAKE_ROLE: TRANSFORMER
+
+jobs:
+  ingest:
+    name: Ingest Fuel Prices Data
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r carburants_dbt/scripts/requirements.txt
+
+      - name: Run ingestion script
+        working-directory: carburants_dbt/scripts
+        run: python ingest_carburants.py
+
+      - name: Verify ingestion
+        run: |
+          python << EOF
+          import snowflake.connector
+          import os
+
+          conn = snowflake.connector.connect(
+              account=os.environ['SNOWFLAKE_ACCOUNT'],
+              user=os.environ['SNOWFLAKE_USER'],
+              password=os.environ['SNOWFLAKE_PASSWORD'],
+              database=os.environ['SNOWFLAKE_DATABASE'],
+              schema=os.environ['SNOWFLAKE_SCHEMA'],
+              warehouse=os.environ['SNOWFLAKE_WAREHOUSE'],
+              role=os.environ['SNOWFLAKE_ROLE']
+          )
+
+          cursor = conn.cursor()
+
+          # Check latest ingestion
+          cursor.execute("""
+              SELECT ingestion_id, completed_at, stations_count, prix_count, status
+              FROM RAW_INGESTION_LOG
+              ORDER BY completed_at DESC
+              LIMIT 1
+          """)
+          row = cursor.fetchone()
+
+          if row:
+              print(f"Latest ingestion: {row[0]}")
+              print(f"Completed at: {row[1]}")
+              print(f"Stations: {row[2]}, Prices: {row[3]}")
+              print(f"Status: {row[4]}")
+
+              if row[4] != 'SUCCESS':
+                  print("ERROR: Latest ingestion was not successful!")
+                  exit(1)
+          else:
+              print("ERROR: No ingestion records found!")
+              exit(1)
+
+          cursor.close()
+          conn.close()
+          EOF
+
+  run-dbt:
+    name: Run dbt Build
+    runs-on: ubuntu-latest
+    needs: ingest
+    if: ${{ github.event.inputs.run_dbt != 'false' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dbt
+        run: pip install dbt-snowflake
+
+      - name: Create profiles.yml
+        working-directory: carburants_dbt
+        run: |
+          cat > profiles.yml << EOF
+          carburants:
+            target: prod
+            outputs:
+              prod:
+                type: snowflake
+                account: "$SNOWFLAKE_ACCOUNT"
+                user: "$SNOWFLAKE_USER"
+                password: "$SNOWFLAKE_PASSWORD"
+                role: TRANSFORMER
+                database: CARBURANTS_PROD
+                warehouse: COMPUTE_WH
+                schema: PUBLIC
+                threads: 8
+          EOF
+
+      - name: Install dbt packages
+        working-directory: carburants_dbt
+        run: dbt deps
+
+      - name: Run dbt build
+        working-directory: carburants_dbt
+        run: dbt build
+
+      - name: Run snapshots
+        working-directory: carburants_dbt
+        run: dbt snapshot
+
+      - name: Test source freshness
+        working-directory: carburants_dbt
+        run: dbt source freshness
+
+  notify-failure:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    needs: [ingest, run-dbt]
+    if: failure()
+    steps:
+      - name: Create issue on failure
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = `Data Ingestion Failed - ${new Date().toISOString().split('T')[0]}`;
+            const body = `
+            ## Ingestion Pipeline Failure
+
+            The scheduled data ingestion workflow has failed.
+
+            **Workflow Run:** [${context.runId}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
+
+            Please investigate and fix the issue.
+            `;
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['bug', 'data-pipeline']
+            });

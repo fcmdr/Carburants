@@ -1,0 +1,29 @@
+# Environment variables - NEVER commit credentials
+.env
+*.env
+.env.*
+!.env.template
+
+# Streamlit secrets - NEVER commit
+**/secrets.toml
+!secrets.toml.template
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.so
+venv/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+logs/

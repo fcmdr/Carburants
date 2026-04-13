@@ -1,0 +1,97 @@
+version: 2
+
+models:
+  - name: rpt_prix_moyen_region
+    description: |
+      Report showing average fuel prices by region with comparison to national average.
+      Includes daily aggregations for the last 30 days.
+    columns:
+      - name: region
+        description: "French administrative region"
+        tests:
+          - not_null
+      - name: carburant_nom
+        description: "Fuel type"
+        tests:
+          - not_null
+      - name: date_prix
+        description: "Date of the price aggregation"
+        tests:
+          - not_null
+      - name: prix_moyen_euros
+        description: "Average price in the region"
+      - name: ecart_vs_national_pct
+        description: "Percentage difference from national average"
+      - name: comparaison_nationale
+        description: "Classification vs national average"
+        tests:
+          - accepted_values:
+              values: ['Moins cher que la moyenne', 'Plus cher que la moyenne', 'Dans la moyenne']
+      - name: rang_region
+        description: "Regional ranking (1 = cheapest region)"
+      - name: is_latest
+        description: "Flag indicating most recent data"
+
+  - name: rpt_stations_moins_cheres
+    description: |
+      Report listing the cheapest fuel stations per region and nationally.
+      Includes top 10 per region and top 100 nationally for each fuel type.
+    columns:
+      - name: station_id
+        description: "Station identifier"
+        tests:
+          - not_null
+      - name: carburant_nom
+        description: "Fuel type"
+        tests:
+          - not_null
+      - name: prix_euros
+        description: "Current fuel price"
+        tests:
+          - not_null
+      - name: rang_national
+        description: "National ranking"
+      - name: rang_region
+        description: "Regional ranking"
+      - name: is_top10_france
+        description: "True if station is in national top 10"
+      - name: is_top10_region
+        description: "True if station is in regional top 10"
+      - name: latitude
+        description: "Station latitude for mapping"
+      - name: longitude
+        description: "Station longitude for mapping"
+
+  - name: rpt_evolution_prix_hebdo
+    description: |
+      Weekly price evolution report with trends and variations.
+      Covers the last 12 weeks with week-over-week, month-over-month,
+      and year-over-year comparisons.
+    columns:
+      - name: annee
+        description: "Year"
+        tests:
+          - not_null
+      - name: semaine
+        description: "Week number"
+        tests:
+          - not_null
+      - name: carburant_nom
+        description: "Fuel type"
+        tests:
+          - not_null
+      - name: prix_moyen_national
+        description: "National average price for the week"
+      - name: variation_hebdo_pct
+        description: "Week-over-week variation percentage"
+      - name: variation_mensuelle_pct
+        description: "Month-over-month variation percentage"
+      - name: variation_annuelle_pct
+        description: "Year-over-year variation percentage"
+      - name: tendance_hebdo
+        description: "Weekly trend classification"
+        tests:
+          - accepted_values:
+              values: ['Forte hausse', 'Hausse modérée', 'Stable', 'Baisse modérée', 'Forte baisse']
+      - name: ecart_regional_max
+        description: "Maximum price spread between top regions"

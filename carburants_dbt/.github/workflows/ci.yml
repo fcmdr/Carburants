@@ -1,0 +1,169 @@
+name: dbt CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'carburants_dbt/**'
+      - '.github/workflows/ci.yml'
+
+env:
+  DBT_PROFILES_DIR: ${{ github.workspace }}/carburants_dbt
+  SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+  SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+  SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+  PR_NUMBER: ${{ github.event.pull_request.number }}
+
+jobs:
+  lint:
+    name: SQLFluff Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install SQLFluff
+        run: pip install sqlfluff sqlfluff-templater-dbt dbt-snowflake
+
+      - name: Install dbt packages
+        working-directory: carburants_dbt
+        run: dbt deps
+
+      - name: Run SQLFluff Lint
+        working-directory: carburants_dbt
+        run: |
+          sqlfluff lint models/ --dialect snowflake --ignore parsing
+
+  dbt-build:
+    name: dbt Build (Slim CI)
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dbt
+        run: pip install dbt-snowflake
+
+      - name: Create profiles.yml for CI
+        working-directory: carburants_dbt
+        run: |
+          cat > profiles.yml << EOF
+          carburants:
+            target: ci
+            outputs:
+              ci:
+                type: snowflake
+                account: "\${{ env.SNOWFLAKE_ACCOUNT }}"
+                user: "\${{ env.SNOWFLAKE_USER }}"
+                password: "\${{ env.SNOWFLAKE_PASSWORD }}"
+                role: TRANSFORMER
+                database: CARBURANTS_CI
+                warehouse: COMPUTE_WH
+                schema: PR_\${{ env.PR_NUMBER }}
+                threads: 4
+          EOF
+
+      - name: Install dbt packages
+        working-directory: carburants_dbt
+        run: dbt deps
+
+      - name: Download production manifest (for slim CI)
+        continue-on-error: true
+        run: |
+          mkdir -p carburants_dbt/target-prod
+          # In a real setup, download from artifact storage or S3
+          # aws s3 cp s3://your-bucket/dbt-artifacts/manifest.json carburants_dbt/target-prod/
+
+      - name: dbt build (modified models only)
+        working-directory: carburants_dbt
+        run: |
+          if [ -f "target-prod/manifest.json" ]; then
+            echo "Running slim CI with state comparison"
+            dbt build --select state:modified+ --state target-prod --fail-fast
+          else
+            echo "Running full build (no production state available)"
+            dbt build --fail-fast
+          fi
+
+      - name: Run dbt tests
+        working-directory: carburants_dbt
+        run: dbt test
+
+      - name: Generate documentation
+        working-directory: carburants_dbt
+        run: dbt docs generate
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbt-artifacts-pr-${{ env.PR_NUMBER }}
+          path: |
+            carburants_dbt/target/manifest.json
+            carburants_dbt/target/catalog.json
+            carburants_dbt/target/run_results.json
+
+  cleanup:
+    name: Cleanup CI Schema
+    runs-on: ubuntu-latest
+    needs: dbt-build
+    if: always()
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install snowflake-connector
+        run: pip install snowflake-connector-python
+
+      - name: Drop CI schema
+        run: |
+          python << EOF
+          import snowflake.connector
+          import os
+
+          conn = snowflake.connector.connect(
+              account=os.environ['SNOWFLAKE_ACCOUNT'],
+              user=os.environ['SNOWFLAKE_USER'],
+              password=os.environ['SNOWFLAKE_PASSWORD'],
+              database='CARBURANTS_CI',
+              warehouse='COMPUTE_WH',
+              role='TRANSFORMER'
+          )
+
+          pr_number = os.environ.get('PR_NUMBER', 'LOCAL')
+          schemas_to_drop = [
+              f'PR_{pr_number}',
+              f'PR_{pr_number}_STAGING',
+              f'PR_{pr_number}_INTERMEDIATE',
+              f'PR_{pr_number}_MARTS',
+              f'PR_{pr_number}_SNAPSHOTS'
+          ]
+
+          cursor = conn.cursor()
+          for schema in schemas_to_drop:
+              try:
+                  cursor.execute(f'DROP SCHEMA IF EXISTS {schema} CASCADE')
+                  print(f'Dropped schema: {schema}')
+              except Exception as e:
+                  print(f'Error dropping {schema}: {e}')
+
+          cursor.close()
+          conn.close()
+          EOF

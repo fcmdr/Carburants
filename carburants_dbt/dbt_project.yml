@@ -1,0 +1,59 @@
+name: 'carburants_dbt'
+version: '1.0.0'
+config-version: 2
+
+profile: 'carburants'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["data"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+vars:
+  # Freshness threshold in hours
+  freshness_threshold_hours: 24
+  # Date range for analysis
+  start_date: '2024-01-01'
+
+models:
+  carburants_dbt:
+    +materialized: view
+    staging:
+      +schema: staging
+      +materialized: view
+      +tags: ['staging']
+    intermediate:
+      +schema: intermediate
+      +materialized: ephemeral
+      +tags: ['intermediate']
+    marts:
+      +schema: marts
+      +materialized: table
+      core:
+        +tags: ['core', 'dimensional']
+      analytics:
+        +tags: ['analytics', 'reporting']
+
+seeds:
+  carburants_dbt:
+    +schema: seeds
+
+snapshots:
+  carburants_dbt:
+    +schema: snapshots
+
+tests:
+  carburants_dbt:
+    +severity: warn
+
+on-run-start:
+  - "{{ log('Starting dbt run for carburants_dbt', info=True) }}"
+
+on-run-end:
+  - "{{ log('Completed dbt run for carburants_dbt', info=True) }}"

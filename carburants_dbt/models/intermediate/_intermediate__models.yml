@@ -1,0 +1,54 @@
+version: 2
+
+models:
+  - name: int_stations_enriched
+    description: |
+      Enriched station data combining information from stations, services,
+      opening hours, prices, and ruptures. Includes calculated fields like
+      data quality score and region mapping.
+    columns:
+      - name: station_id
+        description: "Unique station identifier"
+        tests:
+          - unique
+          - not_null
+      - name: region
+        description: "French administrative region"
+      - name: nb_services
+        description: "Number of services available at the station"
+      - name: nb_carburants_disponibles
+        description: "Number of fuel types currently available"
+      - name: data_quality_score
+        description: "Quality score from 0-100 based on data completeness"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 100
+
+  - name: int_prix_daily_agg
+    description: |
+      Daily aggregated fuel prices with price variations (day, week, month)
+      and rankings (national, regional, departmental).
+    columns:
+      - name: station_id
+        description: "Foreign key to stations"
+        tests:
+          - not_null
+      - name: carburant_nom
+        description: "Fuel type"
+        tests:
+          - not_null
+      - name: date_prix
+        description: "Date of the price"
+        tests:
+          - not_null
+      - name: prix_euros
+        description: "Price in euros per liter"
+      - name: variation_jour_pct
+        description: "Day-over-day price variation percentage"
+      - name: variation_semaine_pct
+        description: "Week-over-week price variation percentage"
+      - name: rang_national
+        description: "National ranking (1 = cheapest)"
+      - name: rang_region
+        description: "Regional ranking (1 = cheapest)"

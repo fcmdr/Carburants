@@ -1,0 +1,98 @@
+version: 2
+
+sources:
+  - name: raw
+    description: "Raw data ingested from the French fuel prices API (data.gouv.fr)"
+    database: "{{ env_var('SNOWFLAKE_DATABASE', 'CARBURANTS_DEV') }}"
+    schema: RAW
+    loader: python_ingest
+    loaded_at_field: _loaded_at
+
+    freshness:
+      warn_after: {count: 12, period: hour}
+      error_after: {count: 24, period: hour}
+
+    tables:
+      - name: raw_stations
+        description: "Raw station data including location, address and services"
+        columns:
+          - name: station_id
+            description: "Unique identifier for the fuel station (PDV ID)"
+            tests:
+              - not_null
+          - name: latitude
+            description: "Latitude coordinate (raw, needs division by 100000)"
+          - name: longitude
+            description: "Longitude coordinate (raw, needs division by 100000)"
+          - name: cp
+            description: "Postal code"
+          - name: pop
+            description: "Population category (R=rural, A=autoroute)"
+          - name: adresse
+            description: "Street address"
+          - name: ville
+            description: "City name"
+          - name: services
+            description: "Comma-separated list of available services"
+          - name: automate_24_24
+            description: "Whether station has 24/24 automated service"
+          - name: horaires_json
+            description: "Opening hours in custom format"
+          - name: _loaded_at
+            description: "Timestamp when the data was loaded"
+
+      - name: raw_prix
+        description: "Raw fuel prices for each station and fuel type"
+        columns:
+          - name: station_id
+            description: "Foreign key to stations"
+            tests:
+              - not_null
+          - name: carburant_nom
+            description: "Fuel type name (Gazole, SP95, SP98, E10, E85, GPLc)"
+          - name: carburant_id
+            description: "Fuel type ID"
+          - name: valeur
+            description: "Price in euros per liter (as string)"
+          - name: maj
+            description: "Last update timestamp (as string)"
+          - name: _loaded_at
+            description: "Timestamp when the data was loaded"
+
+      - name: raw_ruptures
+        description: "Fuel shortage/unavailability records"
+        columns:
+          - name: station_id
+            description: "Foreign key to stations"
+          - name: carburant_nom
+            description: "Fuel type name"
+          - name: carburant_id
+            description: "Fuel type ID"
+          - name: debut
+            description: "Start date of shortage"
+          - name: fin
+            description: "End date of shortage (if known)"
+          - name: type
+            description: "Type of shortage"
+          - name: _loaded_at
+            description: "Timestamp when the data was loaded"
+
+      - name: raw_ingestion_log
+        description: "Log of all ingestion runs"
+        columns:
+          - name: ingestion_id
+            description: "Unique identifier for the ingestion run"
+          - name: started_at
+            description: "When the ingestion started"
+          - name: completed_at
+            description: "When the ingestion completed"
+          - name: stations_count
+            description: "Number of stations ingested"
+          - name: prix_count
+            description: "Number of price records ingested"
+          - name: ruptures_count
+            description: "Number of rupture records ingested"
+          - name: status
+            description: "SUCCESS or FAILED"
+          - name: error_message
+            description: "Error details if failed"

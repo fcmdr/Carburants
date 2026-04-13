@@ -1,0 +1,64 @@
+# dbt
+target/
+dbt_packages/
+logs/
+.user.yml
+
+# Profiles (contains credentials)
+profiles.yml
+!profiles.yml.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Elementary
+edr_target/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Data files (don't commit large data)
+*.csv
+!data/*.csv
+*.xml
+*.zip
+*.gz
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+
+# Secrets
+secrets/
+credentials/
+*.pem
+*.key

@@ -1,0 +1,134 @@
+version: 2
+
+models:
+  - name: stg_carburants__stations
+    description: "Cleaned and standardized fuel station data"
+    columns:
+      - name: station_id
+        description: "Unique identifier for the fuel station"
+        tests:
+          - unique
+          - not_null
+      - name: latitude
+        description: "Latitude coordinate (WGS84)"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 41.0
+              max_value: 52.0
+              config:
+                severity: warn
+      - name: longitude
+        description: "Longitude coordinate (WGS84)"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: -5.5
+              max_value: 10.0
+              config:
+                severity: warn
+      - name: code_postal
+        description: "French postal code"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_value_lengths_to_equal:
+              value: 5
+              config:
+                severity: warn
+      - name: code_departement
+        description: "Department code (2 digits)"
+      - name: ville
+        description: "City name (uppercase)"
+      - name: adresse
+        description: "Street address"
+      - name: type_station
+        description: "Station type (Route, Autoroute, Inconnu)"
+        tests:
+          - accepted_values:
+              values: ['Route', 'Autoroute', 'Inconnu']
+      - name: is_automate_24_24
+        description: "Whether station has 24/24 automated service"
+
+  - name: stg_carburants__prix
+    description: "Cleaned fuel prices with parsed dates and validation flags"
+    columns:
+      - name: station_id
+        description: "Foreign key to stations"
+        tests:
+          - not_null
+      - name: carburant_nom
+        description: "Fuel type name (standardized uppercase)"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['GAZOLE', 'SP95', 'SP98', 'E10', 'E85', 'GPLC']
+              config:
+                severity: warn
+      - name: prix_euros
+        description: "Price in euros per liter"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0.5
+              max_value: 5.0
+              config:
+                severity: warn
+      - name: date_maj
+        description: "Last price update timestamp"
+      - name: date_prix
+        description: "Date of the price (for daily aggregation)"
+      - name: is_prix_invalide
+        description: "Flag for invalid price values"
+      - name: is_prix_suspect
+        description: "Flag for suspiciously high/low prices"
+
+  - name: stg_carburants__services
+    description: "Unpivoted and categorized station services"
+    columns:
+      - name: station_id
+        description: "Foreign key to stations"
+        tests:
+          - not_null
+      - name: service_nom
+        description: "Service name (uppercase)"
+        tests:
+          - not_null
+      - name: service_categorie
+        description: "Service category"
+        tests:
+          - accepted_values:
+              values: ['Lavage', 'Entretien', 'Commerce', 'Restauration', 'Commodités', 'Recharge', 'Carburant', 'Paiement', 'Autre']
+
+  - name: stg_carburants__horaires
+    description: "Parsed station opening hours by day"
+    columns:
+      - name: station_id
+        description: "Foreign key to stations"
+        tests:
+          - not_null
+      - name: jour_numero
+        description: "Day number (1=Monday, 7=Sunday)"
+        tests:
+          - accepted_values:
+              values: [1, 2, 3, 4, 5, 6, 7]
+      - name: jour_nom
+        description: "Day name in French"
+      - name: is_ferme
+        description: "Whether station is closed this day"
+      - name: ouverture_1
+        description: "First opening time (HH:MM)"
+      - name: fermeture_1
+        description: "First closing time (HH:MM)"
+
+  - name: stg_carburants__ruptures
+    description: "Fuel shortage/unavailability records"
+    columns:
+      - name: station_id
+        description: "Foreign key to stations"
+        tests:
+          - not_null
+      - name: carburant_nom
+        description: "Fuel type name"
+      - name: date_debut
+        description: "Start of shortage"
+      - name: date_fin
+        description: "End of shortage (null if ongoing)"
+      - name: is_en_cours
+        description: "Whether shortage is currently active"

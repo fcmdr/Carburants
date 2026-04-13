@@ -1,0 +1,7 @@
+carburant_id,carburant_nom,carburant_nom_complet,categorie,est_essence,est_diesel,est_bio,taux_bio_pct,description
+1,GAZOLE,Gazole,Diesel,false,true,false,0,Carburant diesel standard pour moteurs diesel
+2,SP95,Sans Plomb 95,Essence,true,false,false,0,Essence sans plomb avec indice d'octane 95
+3,SP98,Sans Plomb 98,Essence,true,false,false,0,Essence sans plomb premium avec indice d'octane 98
+4,E10,SP95-E10,Essence,true,false,true,10,Essence avec 10% de bioéthanol
+5,E85,Superéthanol E85,Biocarburant,true,false,true,85,Biocarburant avec 85% de bioéthanol
+6,GPLC,GPL Carburant,GPL,false,false,false,0,Gaz de pétrole liquéfié pour véhicules équipés

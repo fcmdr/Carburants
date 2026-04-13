@@ -1,0 +1,14 @@
+# Environment variables - NEVER commit credentials
+.env
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.so
+
+# Virtual environment
+venv/
+.venv/

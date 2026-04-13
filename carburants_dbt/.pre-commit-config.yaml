@@ -1,0 +1,64 @@
+repos:
+  # General hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: ['--unsafe']
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  # SQLFluff for SQL linting
+  - repo: https://github.com/sqlfluff/sqlfluff
+    rev: 3.0.7
+    hooks:
+      - id: sqlfluff-lint
+        args: ['--dialect', 'snowflake']
+        additional_dependencies: ['dbt-snowflake', 'sqlfluff-templater-dbt']
+
+  # dbt-checkpoint for dbt best practices
+  - repo: https://github.com/dbt-checkpoint/dbt-checkpoint
+    rev: v2.0.2
+    hooks:
+      # Model checks
+      - id: check-model-has-description
+        files: ^carburants_dbt/models/
+      - id: check-model-has-tests
+        files: ^carburants_dbt/models/
+        args: ['--test-cnt', '1']
+      - id: check-model-has-properties-file
+        files: ^carburants_dbt/models/
+
+      # Source checks
+      - id: check-source-has-freshness
+        files: ^carburants_dbt/models/staging/
+
+      # Column checks
+      - id: check-column-desc-are-same
+        files: ^carburants_dbt/models/
+
+      # Script checks
+      - id: check-script-semicolon
+        files: ^carburants_dbt/models/
+
+      # Macro checks
+      - id: check-macro-has-description
+        files: ^carburants_dbt/macros/
+
+  # Python linting for scripts
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.3.4
+    hooks:
+      - id: ruff
+        files: ^carburants_dbt/scripts/
+      - id: ruff-format
+        files: ^carburants_dbt/scripts/
+
+# CI configuration
+ci:
+  autofix_prs: true
+  autoupdate_schedule: weekly

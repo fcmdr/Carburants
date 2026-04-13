@@ -1,0 +1,49 @@
+version: 2
+
+seeds:
+  - name: types_carburants
+    description: |
+      Reference data for fuel types available in France.
+      This seed provides standardized attributes for each fuel type
+      including category, bio content, and descriptions.
+    config:
+      column_types:
+        carburant_id: varchar(10)
+        carburant_nom: varchar(20)
+        carburant_nom_complet: varchar(50)
+        categorie: varchar(20)
+        est_essence: boolean
+        est_diesel: boolean
+        est_bio: boolean
+        taux_bio_pct: integer
+        description: varchar(200)
+    columns:
+      - name: carburant_id
+        description: "Unique identifier for the fuel type"
+        tests:
+          - unique
+          - not_null
+      - name: carburant_nom
+        description: "Short fuel name (matches API data)"
+        tests:
+          - unique
+          - not_null
+      - name: carburant_nom_complet
+        description: "Full descriptive name"
+      - name: categorie
+        description: "Fuel category (Essence, Diesel, Biocarburant, GPL)"
+        tests:
+          - accepted_values:
+              values: ['Essence', 'Diesel', 'Biocarburant', 'GPL']
+      - name: est_essence
+        description: "True if this is a gasoline-based fuel"
+      - name: est_diesel
+        description: "True if this is a diesel fuel"
+      - name: est_bio
+        description: "True if this contains biofuel"
+      - name: taux_bio_pct
+        description: "Percentage of biofuel content"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 100
