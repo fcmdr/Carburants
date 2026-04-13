@@ -2,8 +2,8 @@ name: Data Ingestion
 
 on:
   schedule:
-    # Run every 6 hours
-    - cron: '0 */6 * * *'
+    # Run once daily at 6:00 AM UTC (7-8 AM Paris time)
+    - cron: '0 6 * * *'
 
   workflow_dispatch:
     inputs:
