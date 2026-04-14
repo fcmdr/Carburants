@@ -1,207 +1,235 @@
-# Carburants DBT - Prix des Carburants France
+# Carburants France
 
-[![dbt CI](https://github.com/YOUR_USERNAME/carburants_dbt/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/carburants_dbt/actions/workflows/ci.yml)
-[![Data Freshness](https://github.com/YOUR_USERNAME/carburants_dbt/actions/workflows/ingest.yml/badge.svg)](https://github.com/YOUR_USERNAME/carburants_dbt/actions/workflows/ingest.yml)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://carburants-c7q8dfemchmf6yttdwttpv.streamlit.app/)
+[![dbt](https://img.shields.io/badge/dbt-1.7+-FF694B?logo=dbt)](https://www.getdbt.com/)
+[![Snowflake](https://img.shields.io/badge/Snowflake-Data%20Warehouse-29B5E8?logo=snowflake)](https://www.snowflake.com/)
 
-Projet dbt professionnel pour l'analyse des prix des carburants en France, utilisant les données ouvertes de [data.gouv.fr](https://www.data.gouv.fr/).
+A data engineering project that analyzes French fuel station prices using a modern data stack: Python ingestion, dbt transformations, Snowflake warehouse, and Streamlit visualization.
+
+## Live Demo
+
+**[View the Dashboard](https://carburants-c7q8dfemchmf6yttdwttpv.streamlit.app/)**
+
+## Project Overview
+
+This project demonstrates a complete end-to-end data pipeline that:
+
+1. **Ingests** real-time fuel price data from the French government's open data API
+2. **Transforms** raw XML data into a dimensional model using dbt
+3. **Stores** the data in Snowflake with a star schema optimized for analytics
+4. **Visualizes** insights through an interactive Streamlit dashboard
+
+### Data Source
+
+The data comes from [data.gouv.fr](https://donnees.roulez-eco.fr/opendata/instantane), France's official open data platform, providing real-time fuel prices for 10,000+ gas stations across the country.
 
 ## Architecture
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Source    │────▶│   Staging   │────▶│Intermediate │────▶│    Marts    │
-│  (RAW API)  │     │  (cleaned)  │     │  (enriched) │     │ (analytics) │
-└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
-                                                                    │
-                                                                    ▼
-                                                            ┌─────────────┐
-                                                            │  Reports    │
-                                                            │ (dashboard) │
-                                                            └─────────────┘
+                                    CARBURANTS FRANCE ARCHITECTURE
++-------------------------------------------------------------------------------------------+
+|                                                                                           |
+|   DATA SOURCE                    INGESTION                      TRANSFORMATION            |
+|   +-------------+               +-------------+                +------------------+       |
+|   |  data.gouv  |    HTTP/XML   |   Python    |    Snowflake   |       dbt        |       |
+|   |    .fr      | ------------> |   Script    | -------------> |    Models        |       |
+|   | (Fuel API)  |               | (ingest.py) |                |                  |       |
+|   +-------------+               +-------------+                +------------------+       |
+|                                       |                               |                   |
+|                                       v                               v                   |
+|                               +-----------------------------------------------+           |
+|                               |              SNOWFLAKE WAREHOUSE              |           |
+|                               |  +----------+  +-------------+  +----------+  |           |
+|                               |  |   RAW    |  | STAGING/INT |  |  MARTS   |  |           |
+|                               |  | SCHEMA   |->|   SCHEMAS   |->|  SCHEMA  |  |           |
+|                               |  +----------+  +-------------+  +----------+  |           |
+|                               +-----------------------------------------------+           |
+|                                                      |                                    |
+|                                                      v                                    |
+|                                            +------------------+                           |
+|                                            |    Streamlit     |                           |
+|                                            |    Dashboard     |                           |
+|                                            | (Hosted on Cloud)|                           |
+|                                            +------------------+                           |
+|                                                                                           |
++-------------------------------------------------------------------------------------------+
 ```
 
-### Couches de données
-
-| Couche | Description | Matérialisation |
-|--------|-------------|-----------------|
-| **Raw** | Données brutes de l'API | Tables (via Python) |
-| **Staging** | Nettoyage et typage | Views |
-| **Intermediate** | Enrichissement et agrégation | Ephemeral |
-| **Marts/Core** | Schéma en étoile dimensionnel | Tables |
-| **Marts/Analytics** | Rapports et KPIs | Tables |
-| **Snapshots** | Historisation SCD Type 2 | Tables |
-
-## Modèle de données
-
-### Schéma en étoile
+## Star Schema
 
 ```
-                    ┌───────────────┐
-                    │  dim_regions  │
-                    └───────┬───────┘
-                            │
-┌───────────────┐   ┌───────┴───────┐   ┌───────────────┐
-│ dim_carburants│───│fct_prix_carbu │───│  dim_stations │
-└───────────────┘   └───────┬───────┘   └───────────────┘
-                            │
-                    ┌───────┴───────┐
-                    │   dim_date    │
-                    └───────────────┘
+                                    DIMENSIONAL MODEL (STAR SCHEMA)
+
+                    +------------------+                    +------------------+
+                    |   dim_stations   |                    |   dim_regions    |
+                    +------------------+                    +------------------+
+                    | station_key (PK) |                    | region_key (PK)  |
+                    | station_id       |                    | region_nom       |
+                    | ville            |                    | nb_departements  |
+                    | adresse          |                    +--------+---------+
+                    | code_postal      |                             |
+                    | latitude         |                             |
+                    | longitude        |         +-------------------+
+                    | type_station     |         |
+                    | services_list    |         |
+                    +--------+---------+         |
+                             |                   |
+                             |   +---------------------------------+
+                             |   |      fct_prix_carburants        |
+                             +-->|          (FACT TABLE)           |<--+
+                                 +---------------------------------+   |
+                                 | prix_key (PK)                   |   |
+                                 | station_key (FK) ---------------+   |
+                                 | carburant_key (FK) -----------------+
+                                 | date_key (FK) ----------------------+
+                                 | region_key (FK) --------------------+
+                                 | prix_euros                      |   |
+                                 | rang_national                   |   |
+                                 | rang_region                     |   |
+                                 | categorie_prix                  |   |
+                                 | tendance_prix                   |   |
+                                 +---------------------------------+   |
+                                                                       |
+                    +------------------+                    +-----------+------+
+                    |  dim_carburants  |                    |    dim_date      |
+                    +------------------+                    +------------------+
+                    | carburant_key(PK)|                    | date_key (PK)    |
+                    | carburant_id     |                    | date_day         |
+                    | carburant_nom    |                    | day_of_week      |
+                    | (GAZOLE, SP95,   |                    | week_of_year     |
+                    |  SP98, E10, E85) |                    | month_name       |
+                    +------------------+                    +------------------+
 ```
 
-## Démarrage rapide
+## Tech Stack
 
-### Prérequis
+| Layer | Technology | Purpose |
+|-------|------------|---------|
+| **Data Source** | data.gouv.fr API | Real-time French fuel prices |
+| **Ingestion** | Python, Requests | Download and parse XML data |
+| **Storage** | Snowflake | Cloud data warehouse |
+| **Transformation** | dbt Core | SQL-based data modeling |
+| **Visualization** | Streamlit, Plotly | Interactive dashboard |
+| **Hosting** | Streamlit Cloud | Dashboard deployment |
 
-- Python 3.10+
-- dbt-core 1.7+
-- Compte Snowflake (trial gratuit disponible)
+## Key Features & Skills Demonstrated
 
-### Installation
+- **Data Engineering**: ETL pipeline from raw XML to analytics-ready tables
+- **Data Modeling**: Star schema design with facts and dimensions
+- **dbt Best Practices**: Staging, intermediate, and mart layers with tests and documentation
+- **SQL Analytics**: Window functions, rankings, price categorization
+- **Python**: XML parsing, API integration, Snowflake connector
+- **Data Visualization**: Interactive maps, KPIs, filterable tables
+- **Cloud Deployment**: Streamlit Cloud with secure secrets management
+
+## Project Structure
+
+```
+Carburants/
+|-- carburants_dbt/                 # dbt project
+|   |-- models/
+|   |   |-- staging/                # Raw data cleaning
+|   |   |   |-- stg_carburants__stations.sql
+|   |   |   |-- stg_carburants__prix.sql
+|   |   |   |-- stg_carburants__services.sql
+|   |   |   +-- stg_carburants__ruptures.sql
+|   |   |-- intermediate/           # Business logic
+|   |   |   |-- int_stations_enriched.sql
+|   |   |   +-- int_prix_daily_agg.sql
+|   |   +-- marts/
+|   |       |-- core/               # Dimensional model
+|   |       |   |-- dim_stations.sql
+|   |       |   |-- dim_carburants.sql
+|   |       |   |-- dim_regions.sql
+|   |       |   |-- dim_date.sql
+|   |       |   +-- fct_prix_carburants.sql
+|   |       +-- analytics/          # Reports
+|   |           |-- rpt_stations_moins_cheres.sql
+|   |           |-- rpt_prix_moyen_region.sql
+|   |           +-- rpt_evolution_prix_hebdo.sql
+|   |-- scripts/
+|   |   +-- ingest_carburants.py    # Data ingestion script
+|   +-- dbt_project.yml
+|-- streamlit_app/
+|   |-- app.py                      # Dashboard application
+|   +-- requirements.txt
+|-- docs/
+|   +-- screenshots/                # Dashboard screenshots
++-- README.md
+```
+
+## How to Run Locally
+
+### Prerequisites
+
+- Python 3.9+
+- Snowflake account
+- dbt Core 1.7+
+
+### 1. Clone the Repository
 
 ```bash
-# Cloner le repository
-git clone https://github.com/YOUR_USERNAME/carburants_dbt.git
-cd carburants_dbt
+git clone https://github.com/fcmdr/Carburants.git
+cd Carburants
+```
 
-# Installer dbt
+### 2. Set Up Environment Variables
+
+Create a `.env` file with your Snowflake credentials:
+
+```env
+SNOWFLAKE_ACCOUNT=your_account
+SNOWFLAKE_USER=your_user
+SNOWFLAKE_PASSWORD=your_password
+SNOWFLAKE_DATABASE=CARBURANTS_DEV
+SNOWFLAKE_WAREHOUSE=COMPUTE_WH
+SNOWFLAKE_ROLE=TRANSFORMER
+```
+
+### 3. Install Dependencies
+
+```bash
+# For ingestion script
+pip install -r carburants_dbt/scripts/requirements.txt
+
+# For Streamlit app
+pip install -r streamlit_app/requirements.txt
+
+# For dbt
 pip install dbt-snowflake
+```
 
-# Copier et configurer le profil
-cp profiles.yml.example ~/.dbt/profiles.yml
-# Éditer ~/.dbt/profiles.yml avec vos credentials Snowflake
+### 4. Run the Data Pipeline
 
-# Installer les packages dbt
+```bash
+# Ingest data from API to Snowflake
+python carburants_dbt/scripts/ingest_carburants.py
+
+# Run dbt transformations
+cd carburants_dbt
 dbt deps
-
-# Vérifier la connexion
-dbt debug
-```
-
-### Première exécution
-
-```bash
-# Charger les données de référence
-dbt seed
-
-# Exécuter tous les modèles et tests
 dbt build
-
-# Générer la documentation
-dbt docs generate
-dbt docs serve
 ```
 
-## Ingestion des données
-
-L'ingestion est automatisée via GitHub Actions (chaque jour) ou peut être lancée manuellement :
+### 5. Launch the Dashboard
 
 ```bash
-# Installer les dépendances Python
-pip install -r scripts/requirements.txt
-
-# Configurer les variables d'environnement
-export SNOWFLAKE_ACCOUNT=xxx
-export SNOWFLAKE_USER=xxx
-export SNOWFLAKE_PASSWORD=xxx
-
-# Lancer l'ingestion
-python scripts/ingest_carburants.py
+cd streamlit_app
+streamlit run app.py
 ```
 
-## Tests
+## Screenshots
 
-Le projet inclut plusieurs niveaux de tests :
+### Top Stations Dashboard
+![Top Stations](docs/screenshots/dashboard-top-stations.png)
 
-```bash
-# Tests génériques (unique, not_null, relationships)
-dbt test --select test_type:generic
+### Search by City/Department
+![Search](docs/screenshots/dashboard-search.png)
 
-# Tests singuliers (freshness, orphans, bounds)
-dbt test --select test_type:singular
+## License
 
-# Tests dbt_expectations (ranges, patterns)
-dbt test --select tag:dbt_expectations
-```
+This project is for educational and portfolio purposes. The data is sourced from France's open government data initiative.
 
-### Tests inclus
+---
 
-- **Freshness** : Vérification que les données sont récentes (< 24h)
-- **Orphan records** : Pas de prix sans station correspondante
-- **Geographic bounds** : Coordonnées dans les limites de la France
-- **Price ranges** : Prix dans des plages réalistes (0.5€ - 5€)
-- **Referential integrity** : Relations entre dimensions et faits
-
-## CI/CD
-
-### Pull Request (CI)
-
-1. **SQLFluff** : Linting du SQL
-2. **dbt build** : Slim CI sur les modèles modifiés
-3. **Tests** : Exécution des tests
-4. **Cleanup** : Suppression du schéma CI
-
-### Merge to Main (CD)
-
-1. **dbt build** : Build complet en production
-2. **Snapshots** : Mise à jour de l'historique
-3. **Elementary** : Rapport d'observabilité
-4. **Documentation** : Déploiement sur GitHub Pages
-
-## Observabilité
-
-Le projet utilise [Elementary](https://www.elementary-data.com/) pour :
-
-- Monitoring de la fraîcheur des données
-- Détection des anomalies
-- Alertes sur les échecs de tests
-- Dashboard de santé du pipeline
-
-## Structure du projet
-
-```
-carburants_dbt/
-├── .github/workflows/      # CI/CD pipelines
-├── models/
-│   ├── staging/           # Nettoyage données brutes
-│   ├── intermediate/      # Logique métier
-│   └── marts/
-│       ├── core/          # Schéma en étoile
-│       └── analytics/     # Rapports
-├── snapshots/             # SCD Type 2
-├── macros/                # Macros réutilisables
-├── tests/singular/        # Tests personnalisés
-├── data/                  # Seeds (données de référence)
-└── scripts/               # Ingestion Python
-```
-
-## Packages utilisés
-
-| Package | Usage |
-|---------|-------|
-| dbt_utils | Surrogate keys, date spine |
-| dbt_expectations | Tests avancés |
-| dbt_date | Dimension date |
-| elementary | Observabilité |
-| codegen | Génération de code |
-
-## Bonnes pratiques implémentées
-
-- ✅ Architecture 3 couches (staging, intermediate, marts)
-- ✅ Schéma en étoile dimensionnel
-- ✅ Snapshots SCD Type 2 pour l'historisation
-- ✅ Slim CI avec `state:modified+`
-- ✅ Tests dbt_expectations avancés
-- ✅ Pre-commit hooks (SQLFluff, dbt-checkpoint)
-- ✅ Documentation auto-générée
-- ✅ Observabilité avec Elementary
-
-## Ressources
-
-- [Documentation dbt](https://docs.getdbt.com/)
-- [API Prix Carburants](https://www.prix-carburants.gouv.fr/rubrique/opendata/)
-- [Snowflake Trial](https://signup.snowflake.com/)
-
-## Licence
-
-MIT
+Built with dbt, Snowflake, and Streamlit
